@@ -370,7 +370,7 @@ namespace chfs {
         auto lastLogIndex = log_storage->Size() - 1;
         auto lastLogTerm = log_storage->At(lastLogIndex).term;
         bool is_term_stale = term < current_term;
-        bool already_voted_for_candidate = voteFor == args.candidateId;
+        bool already_voteFor_candidate = voteFor == args.candidateId;
         bool has_voted = voteFor != -1 && voteFor != my_id;
         bool log_is_up_to_date =
                 lastLogTerm > args.lastLogTerm ||
@@ -379,7 +379,7 @@ namespace chfs {
         if (is_term_stale) {
             return {current_term, false};
         }
-        if (already_voted_for_candidate) {
+        if (already_voteFor_candidate) {
             return {current_term, true};
         }
         if (has_voted) {
@@ -479,8 +479,9 @@ namespace chfs {
             persist();
             return {current_term, true};
         }
-        if (arg.prevLogIndex != 0 && (arg.prevLogIndex > log_storage->Size() - 1 ||
-                                      log_storage->At(arg.prevLogIndex).term != arg.prevLogTerm)) {
+        else if (arg.prevLogIndex > 0 && (arg.prevLogIndex > log_storage->Size() - 1 ||
+        log_storage->At(arg.prevLogIndex).term != arg.prevLogTerm)) {
+            // If log consistency check fails
             return {current_term, false};
         }
 
@@ -491,46 +492,59 @@ namespace chfs {
             ++arg.prevLogIndex; // Increment index for each inserted entry
         }
 
+        // Update the commit index and persist state
         commit_index = std::min(log_storage->Size() - 1, arg.leaderCommit);
         persist();
+
+        // Return success
         return {current_term, true};
     }
 
     template <typename StateMachine, typename Command>
     void RaftNode<StateMachine, Command>::handle_append_entries_reply(int target, const AppendEntriesArgs<Command> arg,
                                                                       const AppendEntriesReply reply) {
-        /* Lab3: Your code here */
         if (role != RaftRole::Leader) {
             return;
         }
+
+        if (reply.term > current_term) {
+            current_term = reply.term;
+            role = RaftRole::Follower;
+            voteFor = -1;
+            return;
+        }
+
         if (!reply.success) {
-            if (reply.term > current_term) {
-                become_follower(reply.term, target);
-                return;
-            }
-            next_index[target] = arg.prevLogIndex;
-            return;
-        }
-        if (arg.heartBeat) {
-            return;
-        }
-        auto agree_index = arg.prevLogIndex + arg.entries.size();
-        match_index[target] = agree_index;
-        next_index[target] = match_index[target] + 1;
-        for (int N = commit_index + 1; N <= agree_index; ++N) {
-            int agree_num = 1;
-            for (const auto &[node_id, index] : match_index) {
-                if (index >= N) {
-                    agree_num++;
+            next_index[target] = std::max(1, next_index[target] - 1);
+        } else {
+            if (!arg.entries.empty()) {
+                match_index[target] = arg.prevLogIndex + arg.entries.size();
+                next_index[target] = match_index[target] + 1;
+
+                int new_commit_index = commit_index;
+                // Check for any new log entries that can be committed.
+                for (int N = commit_index + 1; N <= match_index[target]; ++N) {
+                    int count = 1; // Count includes self.
+                    for (const auto& [node_id, index] : match_index) {
+                        if (index >= N) {
+                            count++;
+                        }
+                    }
+                    // Check if a majority has this entry and it's from the current term.
+                    if (count > node_configs.size() / 2 && log_storage->At(N).term == current_term) {
+                        new_commit_index = N;
+                    }
                 }
-            }
-            if (agree_num >= node_configs.size() / 2 + 1 && log_storage->At(N).term == current_term) {
-                commit_index = N;
-                //      RAFT_LOG("update commit_idx %d", commit_index)
-                //      RAFT_LOG("log %s", debug::entries_to_str(log_storage->Data()).c_str())
+
+                if (new_commit_index > commit_index) {
+                    commit_index = new_commit_index;
+                    // Apply newly committed entries to the state machine.
+                    // This could be another function to apply entries up to commit_index.
+                }
             }
         }
     }
+
 
     template <typename StateMachine, typename Command>
     auto RaftNode<StateMachine, Command>::install_snapshot(InstallSnapshotArgs args) -> InstallSnapshotReply {
