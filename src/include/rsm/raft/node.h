@@ -730,24 +730,31 @@ namespace chfs {
         // Only work for the leader.
 
         /* Uncomment following code when you finish */
-        while (true) {
+        while (!is_stopped()) {
             {
-                if (is_stopped()) {
-                    return;
-                }
-                /* Lab3: Your code here */
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                if (role != RaftRole::Leader) {
-                    continue;
-                }
-                if (!rpc_clients_map[my_id]) {
-                    become_follower(current_term, -1);
-                    continue;
-                }
-                for (const auto &node_id : peer) {
-                    //        auto next = next_index[node_id];
-                    auto args = AppendEntriesArgs<Command>{current_term, my_id, 0, 0, commit_index, true, lastIncludeIndex, {}};
-                    thread_pool->enqueue(&RaftNode::send_append_entries, this, node_id, args);
+
+                // Continue if this node is not the leader.
+                if (role == RaftRole::Leader)
+                {
+                    if (!rpc_clients_map[my_id]) {
+                        become_follower(current_term, -1);
+                        continue;
+                    }
+                    for (const auto &node_id: peer) {
+                        if (node_id == my_id) continue;  // Skip sending to self.
+                        AppendEntriesArgs<Command> args{
+                                current_term,
+                                my_id,
+                                0,  // prevLogIndex would be set in a real scenario.
+                                0,  // prevLogTerm would be set in a real scenario.
+                                commit_index,
+                                true,  // Indicate that this is a heartbeat.
+                                lastIncludeIndex,
+                                {}  // Empty entries for a heartbeat.
+                        };
+                        thread_pool->enqueue(&RaftNode::send_append_entries, this, node_id, args);
+                    }
                 }
             }
         }
