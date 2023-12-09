@@ -455,16 +455,18 @@ namespace chfs {
             return {current_term, false};
         }
 
-        if (arg.heartBeat) {
-            if (arg.term >= current_term) {
-                voteFor = -1;
-                become_follower(arg.term, arg.leaderId);
-            }
+        // If we receive a heartbeat or append entries with an equal or higher term, we know who the leader is
+        if (arg.term >= current_term) {
+            voteFor = -1;
+            become_follower(arg.term, arg.leaderId);
             leaderId = arg.leaderId;
             vote_timer.receive();
-            return {current_term, true};
         }
 
+        // If this is just a heartbeat, then we do not need to process the log entries
+        if (arg.heartBeat) {
+            return {current_term, true};
+        }
 
         if (arg.lastIncludeIndex != 0) {
             lastIncludeIndex = arg.lastIncludeIndex;
@@ -477,8 +479,8 @@ namespace chfs {
             persist();
             return {current_term, true};
         }
-        if (arg.prevLogIndex != 0 && !(arg.prevLogIndex <= log_storage->Size() - 1 &&
-                                         log_storage->At(arg.prevLogIndex).term == arg.prevLogTerm)) {
+        if (arg.prevLogIndex != 0 && (arg.prevLogIndex > log_storage->Size() - 1 ||
+                                      log_storage->At(arg.prevLogIndex).term != arg.prevLogTerm)) {
             return {current_term, false};
         }
 
