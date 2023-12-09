@@ -725,16 +725,9 @@ namespace chfs {
 
     template <typename StateMachine, typename Command>
     void RaftNode<StateMachine, Command>::run_background_ping() {
-        // Periodly send empty append_entries RPC to the followers.
-
-        // Only work for the leader.
-
-        /* Uncomment following code when you finish */
         while (!is_stopped()) {
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-                // Continue if this node is not the leader.
                 if (role == RaftRole::Leader)
                 {
                     if (!rpc_clients_map[my_id]) {
