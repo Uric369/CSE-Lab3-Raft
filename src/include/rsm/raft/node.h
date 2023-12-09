@@ -454,6 +454,7 @@ namespace chfs {
         if (arg.term < current_term) {
             return {current_term, false};
         }
+
         if (arg.heartBeat) {
             if (arg.term >= current_term) {
                 voteFor = -1;
@@ -464,35 +465,32 @@ namespace chfs {
             return {current_term, true};
         }
 
-        //  RAFT_LOG("receive append prev_idx:%d prev_term:%d leader:%d leaderCommit:%d, term:%d entries:%s",
-        //  arg.prevLogIndex,
-        //           arg.prevLogTerm, arg.leaderId, arg.leaderCommit, arg.term,
-        //           debug::entries_to_str(arg.entries).c_str())
+
         if (arg.lastIncludeIndex != 0) {
             lastIncludeIndex = arg.lastIncludeIndex;
             log_storage->EraseAllAfterIndex(arg.prevLogIndex + 1);
-            for (int i = 0; i < arg.entries.size(); ++i) {
-                log_storage->Insert(arg.prevLogIndex + i + 1, arg.entries.at(i));
+            for (const auto& entry : arg.entries) {
+                log_storage->Insert(arg.prevLogIndex + 1, entry);
+                ++arg.prevLogIndex; // Increment index for each inserted entry
             }
             commit_index = std::min(log_storage->Size() - 1, arg.leaderCommit);
             persist();
-            //    RAFT_LOG("update commit_idx %d", commit_index)
-            //    RAFT_LOG("after append log:%s", debug::entries_to_str(log_storage->Data()).c_str())
             return {current_term, true};
         }
         if (arg.prevLogIndex != 0 && !(arg.prevLogIndex <= log_storage->Size() - 1 &&
                                          log_storage->At(arg.prevLogIndex).term == arg.prevLogTerm)) {
-            //    RAFT_LOG("error %d", __LINE__)
             return {current_term, false};
         }
+
+        // Apply the log entries
         log_storage->EraseAllAfterIndex(arg.prevLogIndex + 1);
-        for (int i = 0; i < arg.entries.size(); ++i) {
-            log_storage->Insert(arg.prevLogIndex + i + 1, arg.entries.at(i));
+        for (const auto& entry : arg.entries) {
+            log_storage->Insert(arg.prevLogIndex + 1, entry);
+            ++arg.prevLogIndex; // Increment index for each inserted entry
         }
+
         commit_index = std::min(log_storage->Size() - 1, arg.leaderCommit);
         persist();
-        //  RAFT_LOG("update commit_idx %d", commit_index)
-        //  RAFT_LOG("after append log:%s", debug::entries_to_str(log_storage->Data()).c_str())
         return {current_term, true};
     }
 
