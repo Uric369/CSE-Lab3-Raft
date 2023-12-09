@@ -297,7 +297,6 @@ namespace chfs {
         background_ping = std::make_unique<std::thread>(&RaftNode::run_background_ping, this);
         background_commit = std::make_unique<std::thread>(&RaftNode::run_background_commit, this);
         background_apply = std::make_unique<std::thread>(&RaftNode::run_background_apply, this);
-        RAFT_LOG("start")
         return 0;
     }
 
@@ -314,8 +313,8 @@ namespace chfs {
 
     template <typename StateMachine, typename Command>
     auto RaftNode<StateMachine, Command>::is_leader() -> std::tuple<bool, int> {
-        /* Lab3: Your code here */
-        return std::make_tuple(role == RaftRole::Leader, current_term);
+        // Return a tuple directly using aggregate initialization
+        return {this->role == RaftRole::Leader, this->current_term};
     }
 
     template <typename StateMachine, typename Command>
@@ -328,14 +327,16 @@ namespace chfs {
     -> std::tuple<bool, int, int> {
         /* Lab3: Your code here */
         std::scoped_lock<std::mutex> lock(mtx);
+        // Get the index before potentially appending to the log.
+        int log_index = log_storage->Size() - 1;
+
         if (role != RaftRole::Leader) {
-            return {false, current_term, log_storage->Size() - 1};
+            return {false, current_term, log_index};
         }
         Command cmd;
         cmd.deserialize(cmd_data, cmd_size);
         log_storage->Append({current_term, cmd});
-        RAFT_LOG("value %d", cmd.value)
-        return std::make_tuple(true, current_term, log_storage->Size() - 1);
+        return {true, current_term, log_storage->Size() - 1};
     }
 
     template <typename StateMachine, typename Command>
