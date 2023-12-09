@@ -402,9 +402,37 @@ namespace chfs {
     void RaftNode<StateMachine, Command>::handle_request_vote_reply(int target, const RequestVoteArgs arg,
                                                                     const RequestVoteReply reply) {
         /* Lab3: Your code here */
+//        if (reply.term > current_term) {
+//            this->current_term = reply.term;
+//            if (!reply.voteGranted) {
+//                this->role = RaftRole::Follower;
+//                vote_timer.start();
+//                this->voteFor = -1;
+//                this->current_term = reply.term;
+//                this->leaderId = -1;
+//                this->granted_vote = 0;
+//                persist();
+//                this->voteFor = target;
+//            }
+//        }
+//
+//        if (reply.voteGranted && role == RaftRole::Candidate) {
+//            current_term = std::max(current_term, reply.term);
+//            granted_vote++;
+//            if (granted_vote >= (int)node_configs.size() / 2 + 1) {
+//                this->role = RaftRole::Leader;
+//                this->leaderId = my_id;
+//                this->granted_vote = 0;
+//                this->voteFor = -1;
+//                vote_timer.stop();
+//                persist();
+//            }
+//        }
+
         if (reply.term > current_term) {
             current_term = reply.term;
         }
+
         if (!reply.voteGranted && reply.term > current_term) {
             become_follower(reply.term, -1);
             voteFor = target;
@@ -587,46 +615,26 @@ namespace chfs {
 
     template <typename StateMachine, typename Command>
     void RaftNode<StateMachine, Command>::run_background_election() {
-        // Periodly check the liveness of the leader.
-
-        // Work for followers and candidates.
-
-        /* Uncomment following code when you finish */
-        while (true) {
-            {
-                if (is_stopped()) {
-                    return;
-                }
+        while (!is_stopped()) {
                 /* Lab3: Your code here */
                 std::this_thread::sleep_for(vote_timer.get_interval());
-                if (role == RaftRole::Leader) {
+                if (role == RaftRole::Leader || !rpc_clients_map[my_id]) {
                     continue;
                 }
-                if (!rpc_clients_map[my_id]) {
-                    continue;
-                }
+
                 auto receive = vote_timer.check_receive();
                 auto timeout = vote_timer.timeout();
-                if (role == RaftRole::Follower) {
-                    if (timeout && !receive) {
-                        become_candidate();
+                if (role == RaftRole::Follower && timeout && !receive) become_candidate();
+
+                if (role == RaftRole::Candidate) {
+                    current_term++;
+                    voteFor = my_id;
+                    granted_vote = 1;
+                    auto args = RequestVoteArgs{current_term, my_id, log_storage->Size() - 1, log_storage->Back().term};
+                    for (const auto &node_id: peer) {
+                        thread_pool->enqueue(&RaftNode::send_request_vote, this, node_id, args);
                     }
                 }
-                if (!timeout || receive) {
-                    continue;
-                }
-                current_term++;
-                voteFor = my_id;
-                granted_vote = 1;
-                if (role != RaftRole::Candidate) {
-                    continue;
-                }
-                auto args = RequestVoteArgs{current_term, my_id, log_storage->Size() - 1, log_storage->Back().term};
-                for (const auto &node_id : peer) {
-                    //        RAFT_LOG("send request vote to %d", node_id)
-                    thread_pool->enqueue(&RaftNode::send_request_vote, this, node_id, args);
-                }
-            }
         }
     }
 
