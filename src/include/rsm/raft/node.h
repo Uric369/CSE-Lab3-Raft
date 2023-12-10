@@ -430,22 +430,24 @@ namespace chfs {
 //            }
 //        }
 
-        if (reply.term > current_term) {
-            current_term = reply.term;
+        int replyTerm = reply.term;
+
+        if (replyTerm > current_term) {
+            current_term = replyTerm;
+            if (!reply.voteGranted) {
+                become_follower(replyTerm, -1);
+                voteFor = target;
+            }
         }
 
-        if (!reply.voteGranted && reply.term > current_term) {
-            become_follower(reply.term, -1);
-            voteFor = target;
-        } else if (reply.voteGranted && role == RaftRole::Candidate) {
-            current_term = std::max(current_term, reply.term);
+        if (reply.voteGranted && role == RaftRole::Candidate) {
             granted_vote++;
-            auto half_node = (int)node_configs.size() / 2 + 1;
-            RAFT_LOG("grant:%d from%d half:%d ", (int)granted_vote, target, half_node)
+            int half_node = static_cast<int>(node_configs.size()) / 2 + 1;
             if (granted_vote >= half_node) {
                 become_leader();
             }
         }
+
     }
 
     template <typename StateMachine, typename Command>
