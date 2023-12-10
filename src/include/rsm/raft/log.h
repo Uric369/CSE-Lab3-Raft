@@ -94,40 +94,78 @@ class RaftLog {
     auto end = data_.end();
     return {begin, end};
   }
-  auto Persist() -> int {
-    std::scoped_lock<std::mutex> lock(mtx_);
-    std::vector<uint8_t> buffer(bm_->block_size());
-    auto block_idx = 1;
-    //    LOG_FORMAT_INFO("persist {}", entries_to_str(data_));
-    int sum = 0;
-    int entry_per_block = bm_->block_size() / sizeof(Entry<Command>);
-    int i = 0;
-    auto size = data_.size();
-    while (true) {
-      auto index = i + (block_idx - 1) * entry_per_block;
-      if (index >= data_.size()) {
-        LOG_FORMAT_ERROR("index {} i {} block_idx {} per {} sum {} size {}", index, i, block_idx, entry_per_block, sum,
-                         data_.size());
-      }
-      auto entry = data_.at(index);
-      *((Entry<Command> *)buffer.data() + i) = entry;
-      if (i == entry_per_block - 1) {
-        bm_->write_block(block_idx, buffer.data());
-        block_idx++;
-        buffer.clear();
-        buffer.resize(bm_->block_size());
-        i = 0;
-      } else {
-        i++;
-      }
-      sum++;
-      if (sum == size) {
-        break;
-      }
+//  auto Persist() -> int {
+//    std::scoped_lock<std::mutex> lock(mtx_);
+//    std::vector<uint8_t> buffer(bm_->block_size());
+//    auto block_idx = 1;
+//    //    LOG_FORMAT_INFO("persist {}", entries_to_str(data_));
+//    int sum = 0;
+//    int entry_per_block = bm_->block_size() / sizeof(Entry<Command>);
+//    int i = 0;
+//    auto size = data_.size();
+//    while (true) {
+//      auto index = i + (block_idx - 1) * entry_per_block;
+//      if (index >= data_.size()) {
+////        LOG_FORMAT_ERROR("index {} i {} block_idx {} per {} sum {} size {}", index, i, block_idx, entry_per_block, sum,
+////                         data_.size());
+//      }
+//      auto entry = data_.at(index);
+//      *((Entry<Command> *)buffer.data() + i) = entry;
+//      if (i == entry_per_block - 1) {
+//        bm_->write_block(block_idx, buffer.data());
+//        block_idx++;
+//        buffer.clear();
+//        buffer.resize(bm_->block_size());
+//        i = 0;
+//      } else {
+//        i++;
+//      }
+//      sum++;
+//      if (sum == size) {
+//        break;
+//      }
+//    }
+//    bm_->write_block(block_idx, buffer.data());
+//    return block_idx;
+//  }
+
+
+    auto WriteBlock(int& currentBlockIndex, const std::vector<uint8_t>& buffer) {
+        bm_->write_block(currentBlockIndex++, buffer.data());
     }
-    bm_->write_block(block_idx, buffer.data());
-    return block_idx;
-  }
+
+    auto PersistEntry(int& entryIndex, std::vector<uint8_t>& buffer, int& bufferIndex, int entriesPerBlock, int& currentBlockIndex) {
+        *((Entry<Command> *)buffer.data() + bufferIndex) = data_.at(entryIndex);
+        if (bufferIndex == entriesPerBlock - 1) {
+            WriteBlock(currentBlockIndex, buffer);
+            buffer.clear();
+            buffer.resize(bm_->block_size());
+            bufferIndex = 0;
+        } else {
+            bufferIndex++;
+        }
+    }
+
+    auto Persist() -> int {
+        std::scoped_lock<std::mutex> lock(mtx_);
+        std::vector<uint8_t> buffer(bm_->block_size());
+        int currentBlockIndex = 1;
+        int entriesPerBlock = bm_->block_size() / sizeof(Entry<Command>);
+        int bufferIndex = 0;
+        auto totalEntries = data_.size();
+
+        for (int entryIndex = 0; entryIndex < totalEntries; ++entryIndex) {
+            PersistEntry(entryIndex, buffer, bufferIndex, entriesPerBlock, currentBlockIndex);
+        }
+
+        if (bufferIndex != 0) {
+            WriteBlock(currentBlockIndex, buffer);
+        }
+
+        return currentBlockIndex;
+    }
+
+    
   void Recover(int block_num) {
     std::scoped_lock<std::mutex> lock(mtx_);
     data_.clear();
@@ -166,13 +204,6 @@ class RaftLog {
       std::remove(fmt::format("/tmp/raft_log/node_{}_index_{}.snapshot", node_id, i).c_str());
     }
     snapshot_index = current_snapshot_index;
-    //    if (last_included_index <= (int)data_.size() - 1 && last_included_term == data_.at(last_included_index).term)
-    //    {
-    //      data_.erase(data_.begin() + 1, data_.begin() + last_included_index + 1);
-    //    } else {
-    //      data_.erase(data_.begin() + 1, data_.end());
-    //    }
-    //    LOG_FORMAT_INFO("after save snapshot {}", entries_to_str(data_));
   }
   std::vector<u8> GetSnapshot() {
     std::stringstream ss;

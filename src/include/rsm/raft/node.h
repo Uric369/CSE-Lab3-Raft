@@ -12,7 +12,6 @@
 #include <thread>
 
 #include "block/manager.h"
-#include "common/logger.h"
 #include "common/util.h"
 #include "fmt/core.h"
 #include "librpc/client.h"
@@ -402,34 +401,6 @@ namespace chfs {
     template <typename StateMachine, typename Command>
     void RaftNode<StateMachine, Command>::handle_request_vote_reply(int target, const RequestVoteArgs arg,
                                                                     const RequestVoteReply reply) {
-        /* Lab3: Your code here */
-//        if (reply.term > current_term) {
-//            this->current_term = reply.term;
-//            if (!reply.voteGranted) {
-//                this->role = RaftRole::Follower;
-//                vote_timer.start();
-//                this->voteFor = -1;
-//                this->current_term = reply.term;
-//                this->leaderId = -1;
-//                this->granted_vote = 0;
-//                persist();
-//                this->voteFor = target;
-//            }
-//        }
-//
-//        if (reply.voteGranted && role == RaftRole::Candidate) {
-//            current_term = std::max(current_term, reply.term);
-//            granted_vote++;
-//            if (granted_vote >= (int)node_configs.size() / 2 + 1) {
-//                this->role = RaftRole::Leader;
-//                this->leaderId = my_id;
-//                this->granted_vote = 0;
-//                this->voteFor = -1;
-//                vote_timer.stop();
-//                persist();
-//            }
-//        }
-
         int replyTerm = reply.term;
 
         if (replyTerm > current_term) {
@@ -558,6 +529,7 @@ namespace chfs {
     void RaftNode<StateMachine, Command>::handle_install_snapshot_reply(int target, const InstallSnapshotArgs arg,
                                                                         const InstallSnapshotReply reply) {
         /* Lab3: Your code here */
+
     }
 
     template <typename StateMachine, typename Command>
