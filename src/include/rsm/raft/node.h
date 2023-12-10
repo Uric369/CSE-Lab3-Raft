@@ -549,19 +549,6 @@ namespace chfs {
 
     template <typename StateMachine, typename Command>
     auto RaftNode<StateMachine, Command>::install_snapshot(InstallSnapshotArgs args) -> InstallSnapshotReply {
-        /* Lab3: Your code here */
-        if (current_term > args.term) {
-            return {current_term};
-        }
-        //  auto filename = log_storage->SaveSnapshot(my_id, args.last_included_index, args.last_included_term, args.offset,
-        //                                            args.data, args.done);
-        //  if (filename == "") {
-        //    return {current_term};
-        //  }
-        //  std::ifstream fs(filename, std::ios::binary | std::ios::in);
-        //  std::string str((std::istreambuf_iterator<char>(fs)), std::istreambuf_iterator<char>());
-        //  std::vector<uint8_t> data{str.begin(), str.end()};
-        //  state->apply_snapshot(data);
         return {current_term};
     }
 
