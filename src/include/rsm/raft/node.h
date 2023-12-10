@@ -655,29 +655,17 @@ namespace chfs {
 
     template <typename StateMachine, typename Command>
     void RaftNode<StateMachine, Command>::run_background_commit() {
-        // Periodly send logs to the follower.
-
-        // Only work for the leader.
-
-        /* Uncomment following code when you finish */
-        while (true) {
+        while (!is_stopped()) {
             {
-                if (is_stopped()) {
-                    return;
-                }
-                /* Lab3: Your code here */
                 std::this_thread::sleep_for(std::chrono::milliseconds{300});
-                if (role != RaftRole::Leader) {
+
+                if (role != RaftRole::Leader || !rpc_clients_map[my_id]) {
+                    if (!rpc_clients_map[my_id]) become_follower(current_term, -1);
                     continue;
                 }
-                if (!rpc_clients_map[my_id]) {
-                    become_follower(current_term, -1);
-                    continue;
-                }
+
                 for (const auto node_id : peer) {
-                    if (!rpc_clients_map[node_id]) {
-                        continue;
-                    }
+                    if (!rpc_clients_map[node_id]) continue;
                     auto next_idx = next_index[node_id];
                     auto prev_idx = next_idx - 1;
                     if (prev_idx > log_storage->Size() - 1) {
@@ -685,11 +673,6 @@ namespace chfs {
                     }
                     auto prev_term = log_storage->At(prev_idx).term;
                     auto entries = log_storage->GetAllAfterIndex(prev_idx);
-                    //        RAFT_LOG(
-                    //            "send append to %d prev_idx:%d prev_term:%d leader:%d leaderCommit:%d, term:%d"
-                    //            " entries:%s",
-                    //            node_id, prev_idx, prev_term, my_id, commit_index, current_term,
-                    //            debug::entries_to_str(entries).c_str())
                     auto args = AppendEntriesArgs<Command>{
                             current_term, my_id, prev_idx, prev_term, commit_index, false, lastIncludeIndex, entries,
                     };
