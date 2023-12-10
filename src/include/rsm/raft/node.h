@@ -625,7 +625,6 @@ namespace chfs {
                 if (role == RaftRole::Leader || !rpc_clients_map[my_id]) {
                     continue;
                 }
-
                 auto receive = vote_timer.check_receive();
                 auto timeout = vote_timer.timeout();
                 if (role == RaftRole::Follower && timeout && !receive) become_candidate();
