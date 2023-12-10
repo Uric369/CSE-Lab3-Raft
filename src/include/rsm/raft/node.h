@@ -684,25 +684,16 @@ namespace chfs {
 
     template <typename StateMachine, typename Command>
     void RaftNode<StateMachine, Command>::run_background_apply() {
-        // Periodly apply committed logs the state machine
-
-        // Work for all the nodes.
-
-        /* Uncomment following code when you finish */
-        while (true) {
+        while (!is_stopped()) {
             {
-                if (is_stopped()) {
-                    return;
-                }
-                /* Lab3: Your code here */
                 std::this_thread::sleep_for(std::chrono::milliseconds{300});
                 persist();
                 for (int i = state->store.size(); i <= commit_index; ++i) {
-                    auto index = i;
-                    auto entry = log_storage->At(index);
-                    state->apply_log(entry.command);
+                    auto entry = log_storage->At(i); // 只调用一次At
+                    state->apply_log(entry.command); // 应用日志条目
                 }
-                state->num_append_logs = 0;
+                state->num_append_logs = 0; // 重置追加日志的数量
+
             }
         }
     }
